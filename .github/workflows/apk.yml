@@ -1,0 +1,57 @@
+name: Construir APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Preparar proyecto Android
+        run: |
+          mkdir www
+          cp index.html manifest.json icon-*.png www/
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npx cap init NovaCalc com.jhon.novacalc --web-dir www
+          npx cap add android
+          npx cap sync android
+
+      - name: Poner el icono de NovaCalc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          RES=android/app/src/main/res
+          rm -rf $RES/mipmap-anydpi-v26
+          for par in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            n=${par%%:*}
+            s=${par##*:}
+            convert icon-512.png -resize ${s}x${s} $RES/mipmap-$n/ic_launcher.png
+            cp $RES/mipmap-$n/ic_launcher.png $RES/mipmap-$n/ic_launcher_round.png
+            cp $RES/mipmap-$n/ic_launcher.png $RES/mipmap-$n/ic_launcher_foreground.png
+          done
+
+      - name: Compilar APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Guardar APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovaCalc-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
